@@ -1,0 +1,169 @@
+---
+
+title: 'Create a MCP server'
+
+description: 'Create a MCP server to create set of tools available in your agents.'
+
+---
+
+LLMs can connect with real world through tools.
+
+While we support tools in each agent framework, we also have made "easy to use" adapter to connect MCP Servers.
+You can find easy to install MCP server for standard tools like Gmail, Github, Websearch on the UI, and just use them in your agents.
+But you can also create your own MCP server following this guide.
+
+# Where to start ?
+```sh
+bl create-mcp-server my-mcp-server
+
+cd my-mcp-server
+
+bl serve --hotreload
+```
+
+I will launch an hello world mcp server, then you can test it by using in another terminal :
+```sh
+pnpm test
+```
+
+This command will call two functions in the hello world mcp server.
+- List tools -> Which list all the tools available in the server.
+- Call tool : hello_world -> Which call the hello_world tool defined in the server.
+
+# How to start developing inside ?
+
+If you open the `src/server.ts` file, you will see the whole server implementation.
+It's close from the MCP server standard, only difference is that we use a Blaxel transport to serve it efficiently on our platform.
+
+
+```ts
+import { BlaxelMcpServerTransport, logger } from "@blaxel/sdk";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+
+const server = new McpServer({
+  name: "mymcp",
+  version: "1.0.0",
+  description: ""
+});
+
+server.tool(
+  "hello_world",
+  "Say hello to a person",
+  {
+    firstname: z.string()
+  },
+  async ({firstname}) => {
+    logger.info(`Hello world called`);
+    return {
+      content: [{ type: "text", text: `Hello ${firstname}` }]
+    }
+  }
+);
+
+function main() {
+  let transport;
+  if (process.env.BL_SERVER_PORT) {
+    transport = new BlaxelMcpServerTransport();
+  } else {
+    transport = new StdioServerTransport();
+  }
+  server.connect(transport);
+  logger.info("Server started");
+}
+
+main();
+
+```
+
+
+The main thing you will have to modify will be the tool definition
+```ts
+server.tool(
+  "hello_world", // name
+  "Say hello to a person", // description
+  {
+    firstname: z.string() // parameters
+  },
+  async ({firstname}) => { // tool execution
+    logger.info(`Hello world called`);
+    return {
+      content: [{ type: "text", text: `Hello ${firstname}` }]
+    }
+  }
+);
+```
+Do not forget that name, description and parameters are really important, they will be used by your agent to understand how your tool is working.
+
+# Deploy your MCP server
+Just run a bl deploy in the folder of your project.
+```sh
+bl deploy
+```
+
+You can now use your MCP server in your agent with this code :
+
+```ts
+import { blTools } from "@blaxel/sdk";
+
+const tools = blTools(['blaxel-search']).ToVercelAI();
+// or 
+const tools = blTools(['blaxel-search']).ToLangChain();
+// or
+const tools = blTools(['blaxel-search']).ToLlamaIndex();
+```
+
+
+# How to test it locally ?
+
+While you are developing the MCP server, you may want to launch test command easily.
+You can open the `src/client.ts` file, look how it work, and add any test call you want to check.
+
+```ts
+import { BlaxelMcpClientTransport, logger } from "@blaxel/sdk";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+
+const transport = new BlaxelMcpClientTransport(
+  'http://localhost:1338'
+);
+
+const client = new Client(
+  {
+    name: "mcp-client",
+    version: "1.0.0"
+  },
+  {
+    capabilities: {
+      tools: {}
+    }
+  }
+);
+
+async function main() {
+  await client.connect(transport);
+  const {tools} = await client.listTools();
+  logger.info(JSON.stringify(tools));
+
+  const result = await client.callTool({
+    name:"hello_world",
+    arguments:{ firstname: "John" }
+  });
+  logger.info(JSON.stringify(result))
+
+  await client.close();
+  process.exit(0);
+}
+
+main().catch(logger.error);
+```
+
+You just have to replace, add any call instead of this one.
+
+```ts
+  const result = await client.callTool({
+    name:"hello_world",
+    arguments:{ firstname: "John" }
+  });
+  logger.info(JSON.stringify(result))
+```

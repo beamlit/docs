@@ -181,7 +181,8 @@
       "group": "Functions",
       "pages": [
         "Functions/Overview",
-        "Functions/Invoke-functions"
+        "Functions/Invoke-functions",
+        "Functions/Create-mcp-server"
       ]
     },
     {
