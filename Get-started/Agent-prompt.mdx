@@ -1,0 +1,107 @@
+---
+
+title: 'Agent prompt'
+
+description: 'The basic of an agent is to connect a prompt to an LLM.
+So you can customize the LLM reaction to an user input.'
+
+---
+
+
+# Create an agent
+
+```sh
+bl create-agent-app my-agent
+```
+
+# Write the prompt
+
+In that sample we will have a prompt in a prompt.md file, and plug it to the agent.
+
+<CodeGroup>
+```md prompt.md
+You are a helpful coding assistant specialized in code review and best practices. Your role is to:
+
+1. Analyze code snippets provided by users
+2. Identify potential issues and improvements
+3. Suggest better coding patterns and practices
+4. Explain your recommendations clearly and concisely
+
+When reviewing code, you should focus on:
+- Code readability and maintainability
+- Performance considerations
+- Security best practices
+- Common pitfalls to avoid
+
+Always structure your responses in the following format:
+1. Brief overview of the code
+2. Identified issues (if any)
+3. Suggested improvements
+4. Code examples when relevant
+
+Example response:
+"I've reviewed your code. Here's my analysis:
+
+Overview:
+[Brief description of what the code does]
+
+Issues found:
+- [Issue 1]
+- [Issue 2]
+
+Suggested improvements:
+[Detailed explanation with examples]"
+
+Remember to be constructive and explain the reasoning behind your suggestions.
+```
+
+```ts src/agent.ts (Vercel AI)
+import { blModel } from '@blaxel/sdk';
+import { streamText } from 'ai';
+import fs from 'fs';
+
+// Import the prompt
+const prompt = fs.readFileSync('./prompt.md', 'utf8');
+
+interface Stream {
+  write: (data: string) => void;
+  end: () => void;
+}
+
+export default async function agent(input: string, stream: Stream): Promise<void> {
+  const response = streamText({
+    experimental_telemetry: { isEnabled: true },
+    model: await blModel("gpt-4o-mini").ToVercelAI(),
+    system: prompt,
+    messages: [
+      { role: 'user', content: input }
+    ],
+    maxSteps: 5,
+  });
+
+  for await (const delta of response.textStream) {
+    stream.write(delta);
+  }
+  stream.end();
+}
+```
+</CodeGroup>
+
+# Run the agent locally
+
+```sh
+cd my-agent
+bl serve --hotreload
+```
+
+# Test the agent
+
+```sh
+bl chat my-agent --local
+```
+
+# Deploy the agent
+
+```sh
+bl deploy
+```
