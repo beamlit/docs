@@ -56,7 +56,8 @@
       "pages": [
         "Overview",
         "Get-started",
-        "Get-started/Agent-with-tools"
+        "Get-started/Agent-with-tools",
+        "Get-started/Agent-chaining"
       ]
     },
     {

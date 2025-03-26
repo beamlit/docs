@@ -1,0 +1,242 @@
+---
+
+title: 'Agent chaining'
+
+description: 'Connect agent together to create complex workflows.'
+
+---
+
+
+# Introduction
+AI Agents are becoming increasingly popular across the internet. At their core, these agents are powered by large language models (LLMs) and can be equipped with tools, permissions, and decision-making capabilities—much like a virtual assistant or an autonomous collaborator.
+
+While a single AI Agent can be useful, their true power comes when multiple agents work together in structured workflows. In these setups, agents communicate and collaborate to complete complex tasks efficiently.
+
+This documentation will guide you through setting up and using AI Agent Workflows on Blaxel Platform, breaking down the process step by step. Whether you're new to the concept or looking to optimize your existing workflows, you'll find everything you need to get started.
+
+We will explain 2 use cases where agent chaining is useful :
+- Routing agent
+- Orchestration agent
+
+# Routing agent
+
+In this first example we suppose we have two agents :
+- A mathematical professor
+- An history professor
+
+We will construct these two agent, deploy them separately, and then create a routing agent.
+The routing agent will analyze a question send by an user, and then forward it to the correct professor.
+
+#### Create the agents
+
+```sh
+bl create-agent-app math-agent
+bl create-agent-app history-agent
+bl create-agent-app routing-agent
+```
+
+We will update the default math-agent/src/agent.ts and the history-agent/src/agent.ts file to fit with our needs, for history agent, keep the same model, just change the prompt.
+
+<CodeGroup>
+```ts math-agent/src/agent.ts (Vercel AI)
+import { blModel, logger } from '@blaxel/sdk';
+import { streamText } from 'ai';
+
+interface Stream {
+  write: (data: string) => void;
+  end: () => void;
+}
+
+export default async function agent(input: string, stream: Stream): Promise<void> {
+  const response = streamText({
+    experimental_telemetry: { isEnabled: true },
+    model: await blModel("gpt-4o-mini").ToVercelAI(),
+    system: "You are a mathematical professor, you will answer only to math questions.",
+    messages: [
+      { role: 'user', content: input }
+    ],
+    maxSteps: 5,
+  });
+
+  for await (const delta of response.textStream) {
+    stream.write(delta);
+  }
+  stream.end();
+}
+```
+</CodeGroup>
+
+We can deploy them by executing the following command in the root path of each agent.
+
+```sh
+bl deploy
+```
+
+We will now update the routing-agent/src/agent.ts file to do the routing system.
+
+<CodeGroup>
+```ts routing-agent/src/agent.ts (Vercel AI)
+import { blAgent, blModel } from '@blaxel/sdk';
+import { generateObject } from 'ai';
+import { z } from 'zod';
+
+interface Stream {
+  write: (data: string) => void;
+  end: () => void;
+}
+
+export default async function agent(input: string, stream: Stream): Promise<void> {
+  const routingResponse = await generateObject({
+    model: await blModel("gpt-4o-mini").ToVercelAI(),
+    system:
+      'You are the first point of contact, you need to define if a question is more history or math related.',
+    schema: z.object({
+      agent_type: z.enum(['history', 'math']),
+    }),
+    messages: [
+      {
+        role: 'user',
+        content: input,
+      },
+    ],
+  })
+
+  let response = ""
+  switch (routingResponse.object.agent_type) {
+    case 'history':
+      response = await blAgent("history-agent").run({
+        inputs: input
+      })
+    case 'math':
+      response = await blAgent("math-agent").run({
+        inputs: input
+      })
+    default:
+      response = "I don't know how to answer that question."
+  }
+
+  stream.write(response)
+  stream.end()
+}
+```
+</CodeGroup>
+# Orchestration agent
+
+In this example, we will have one agent which analyze a text, and provide a formatted object.
+We will have another agent which take a decision from that formatted object.
+
+And finally, to run it, we will have an orchestrator agent, which chain both of them.
+
+In that example, we will have an user giving information to know if he can get a loan.
+
+#### Create the agents
+
+```sh
+bl create-agent-app formatting-agent
+bl create-agent-app decision-agent
+bl create-agent-app orchestrator-agent
+```
+
+The formatting agent will format the text into a structured object.
+<CodeGroup>
+```ts formatting-agent/src/agent.ts (Vercel AI)
+import { blModel } from '@blaxel/sdk';
+import { generateObject } from 'ai';
+import { z } from 'zod';
+
+interface Stream {
+  write: (data: string) => void;
+  end: () => void;
+}
+
+export default async function agent(input: string, stream: Stream): Promise<void> {
+  const firstResponse = await generateObject({
+    experimental_telemetry: { isEnabled: true },
+    model: await blModel("gpt-4o-mini").ToVercelAI(),
+    system:
+      'You are a first point of contact for a loan company. Your job is to turn client conversation into loan application.',
+    schema: z.object({
+      name: z.string(),
+      loan_amount: z.number(),
+      loan_time_in_months: z.number(),
+      monthly_income: z.number(),
+    }),
+    messages: [
+      {
+        role: 'user',
+        content: input,
+      },
+    ],
+  })
+
+  stream.write(JSON.stringify(firstResponse.object))
+  stream.end()
+}
+```
+</CodeGroup>
+
+The decision agent will take a decision from the formatted object.
+<CodeGroup>
+```ts decision-agent/src/agent.ts (Vercel AI)
+import { blModel } from '@blaxel/sdk';
+import { generateObject } from 'ai';
+import z from 'zod';
+
+interface Stream {
+  write: (data: string) => void;
+  end: () => void;
+}
+
+export default async function agent(input: string, stream: Stream): Promise<void> {
+  const gateResponse = await generateObject({
+    experimental_telemetry: { isEnabled: true },
+    model: await blModel("gpt-4o-mini").ToVercelAI(),
+    system:
+      'You are a loan specialist. Based on the given json file with client data, your job is to decide if a client can be further processed.',
+    schema: z.object({
+      is_client_accepted: z.boolean(),
+      denial_reason: z
+        .string()
+        .optional()
+        .describe('If client is rejected, you need to give a reason.'),
+    }),
+    messages: [{ role: 'user', content: input }],
+  })
+
+  stream.write(JSON.stringify(gateResponse.object))
+  stream.end()
+}
+```
+</CodeGroup>
+
+The orchestrator agent will chain the formatting agent and the decision agent.
+
+<CodeGroup>
+```ts orchestrator-agent/src/agent.ts (Vercel AI)
+import { blAgent } from '@blaxel/sdk';
+
+interface Stream {
+  write: (data: string) => void;
+  end: () => void;
+}
+
+export default async function agent(input: string, stream: Stream): Promise<void> {
+  let formattedResponse = await blAgent("formatting-agent").run({
+    inputs:input
+  })
+  let decisionResponse = await blAgent("decision-agent").run({
+    inputs:formattedResponse
+  })
+  stream.write(JSON.stringify(decisionResponse))
+  stream.end()
+}
+```
+</CodeGroup>
+
+We can deploy them by executing the following command in the root path of each agent.
+
+```sh
+bl deploy
+```
+
+
