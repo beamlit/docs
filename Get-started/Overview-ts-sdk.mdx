@@ -82,3 +82,67 @@ import { logger } from "@blaxel/sdk";
 
 logger.info("Hello, world!");
 ```
+
+## Root of your project
+
+On top of your project, you will have different files (it can be generated throught the bl create-agent-app command) :
+
+### package.json
+Required for any typescript or javascript project on the platform
+
+
+The main entrypoint we read for deploy and serve your project will be in the package.json file.
+
+```json
+// For example this is the minimal package.json you need to have
+// The start command will be launch with bl serve, and bl deploy artifact used for deployment
+"scripts": {
+  "start": "node src/index.js"
+}
+```
+You can add other scripts with different usages :
+- `dev` : If you add this script, it will be used when you run `bl serve --hotreload`
+-> By default, we use `tsx watch src/index.ts` with ts code, which allow a live reload when you edit your code
+- `build` : If you add this script, it will be call during the build of the artifact, allowing you to run your code in production already builded.
+-> By default, we use `tsc` to compile your code
+- `prod` : If set it will be used as the command in the production environment, it allow to use a different command when you dev locally with `bl serve` which will use the start script, and the prod, which will use this one.
+
+
+A complete example can be this :
+```json
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "prod": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc"
+  },
+```
+
+### blaxel.toml
+
+This file is optional, and allow you to define your project configuration.
+
+```toml
+name = "myproject"
+workspace = "myworkspace"
+type = "function"
+
+agents = ["anotheragent"]
+functions = ["atool"]
+models = ["amodel"]
+
+[env]
+DEFAULT_CITY = "San Francisco"
+```
+
+`name` and `workspace` are not required, but allow you to force the current project to be deploy with these informations, without thinking about it after (if you have multiple workspace for example)
+`type` is optional, but default value will be `agent`, it need to be set to `function` if you want to deploy an MCP server.
+
+`agents` `functions` and `models` are optional, that allow you to create a cache for the resource your link in your project.
+If not set, it will cache the whole workspace resources, this cache is refresh every time you do a `bl deploy` or `bl serve` command.
+This cache is intended to avoid call between your agent or mcp server and our controlplane, in case of missing cache, we fallback, but it slower to boot in serverless mode.
+
+`[env]` is optional, and allow you to define environment variables for your project.
+This variables should not be secrets.
+
+
