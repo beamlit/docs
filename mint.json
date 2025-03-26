@@ -55,7 +55,8 @@
       "group": "Get Started",
       "pages": [
         "Overview",
-        "Get-started"
+        "Get-started",
+        "Get-started/Agent-with-tools"
       ]
     },
     {

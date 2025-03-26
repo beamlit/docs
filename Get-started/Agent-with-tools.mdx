@@ -1,0 +1,215 @@
+---
+
+title: 'Agent with tools'
+
+description: 'Leverage an agent by giving it access to the real world through tools.'
+
+---
+
+Even though large language models (LLMs) are excellent at generating text, they often encounter difficulties with specific tasks like calculations or engaging with external systems, such as fetching current news.
+
+Tools are essentially functions that an LLM can execute. The outcomes of these functions can be fed back into the LLM to refine its subsequent responses.
+
+For instance, if you ask about the "latest news in New York" from an LLM, and a news-fetching tool is available, the LLM can use this tool with New York as the parameter. The tool would then gather the latest news and provide it to the LLM, which can incorporate this information into its reply.
+
+
+
+## What is a tool?
+
+A tool is a function with a configuration that explains to the LLM how to use it.
+
+While we support different frameworks, each has its own way to define tools.
+
+## What can you do with the Blaxel SDK?
+
+We don't restrict the standard usage of each framework, so you can use them in their normal way.
+
+We also provide a way to connect to the MCP Server you have deployed (or built) on the Blaxel platform.
+
+
+## Let's use it
+
+We will start by creating a new hello world with Blaxel CLI
+You will have the ability to choose the framework that fit best your needs.
+
+```sh
+bl create-agent-app my-tool-agent
+
+┃ Project Name                                                                  
+┃ Name of your agent app                                                        
+┃ > my-tool-agent                                                               
+                                                                                
+  Language                                                                      
+  Language to use for your agent app                                            
+  > typescript                                                                  
+                                                                                
+                                                                                
+                                                                                
+  Template                                                                      
+  Template to use for your agent app                                            
+  > vercel-ai                                                                   
+    llamaindex                                                                  
+    langchain   
+```
+
+Then you can just go to your agent code and run it.
+
+```sh
+cd my-tool-agent
+bl serve --hotreload
+```
+
+The standard template already provide example for tools usage.
+`blaxel-search` is a tool provided through Blaxel platform, it's an MCP server which provide a web search endpoint.
+`weather` is a dummy example of a local tool which take a city as argument and return a mock for the weather of the city. (Always sunny)
+
+<CodeGroup>
+```ts agent.ts (Vercel AI)
+import { blModel, blTools, logger } from '@blaxel/sdk';
+import { streamText, tool } from 'ai';
+import { z } from 'zod';
+
+interface Stream {
+  write: (data: string) => void;
+  end: () => void;
+}
+
+export default async function agent(input: string, stream: Stream): Promise<void> {
+  const response = streamText({
+    experimental_telemetry: { isEnabled: true },
+    // dynamic load of model from blaxel platform
+    model: await blModel("gpt-4o-mini").ToVercelAI(),
+    tools: {
+      // dynamic load of tools from blaxel platform
+      ...await blTools(['blaxel-search']).ToVercelAI(),
+      // And here an example of a local tool for vercel ai framework
+      "weather": tool({
+        description: "Get the weather in a specific city",
+        parameters: z.object({
+          city: z.string(),
+        }),
+        execute: async (args: { city: string }) => {
+          logger.debug("TOOLCALLING: local weather", args);
+          return `The weather in ${args.city} is sunny`;
+        },
+      }),
+    },
+    system: "You are an agent which will give the weather when a city is provided, and also do a quick search about this city.",
+    messages: [
+      { role: 'user', content: input }
+    ],
+    maxSteps: 5,
+  });
+
+  for await (const delta of response.textStream) {
+    stream.write(delta);
+  }
+  stream.end();
+}
+```
+
+```typescript agent.ts (LlamaIndex)
+import { blModel, blTools, logger } from '@blaxel/sdk';
+import { agent, AgentStream, tool, ToolCallLLM } from "llamaindex";
+import { z } from "zod";
+interface Stream {
+  write: (data: string) => void;
+  end: () => void;
+}
+
+export default async function myagent(input: string, stream: Stream): Promise<void> {
+  const streamResponse = agent({
+    llm: await blModel("gpt-4o-mini").ToLlamaIndex() as unknown as ToolCallLLM,
+    tools: [...await blTools(['blaxel-search']).ToLlamaIndex(),
+      tool({
+        name: "weather",
+        description: "Get the weather in a specific city",
+        parameters: z.object({
+          city: z.string(),
+        }),
+        execute: async (input) => {
+          logger.debug("TOOLCALLING: local weather", input)
+          return `The weather in ${input.city} is sunny`;
+        },
+      })
+    ],
+    systemPrompt: "If the user ask for the weather, use the weather tool.",
+  }).run(input);
+
+  for await (const event of streamResponse) {
+    if (event instanceof AgentStream) {
+      for (const chunk of event.data.delta) {
+        stream.write(chunk);
+      }
+    }
+  }
+  stream.end();
+}
+```
+
+```typescript agent.ts (LangChain)
+import { blModel, blTools, logger } from '@blaxel/sdk';
+import { HumanMessage } from "@langchain/core/messages";
+import { tool } from "@langchain/core/tools";
+import { createReactAgent } from "@langchain/langgraph/prebuilt";
+import { z } from "zod";
+interface Stream {
+  write: (data: string) => void;
+  end: () => void;
+}
+
+export default async function agent(input: string, stream: Stream): Promise<void> {
+  const streamResponse = await createReactAgent({
+    llm: await blModel("gpt-4o-mini").ToLangChain(),
+    prompt: "If the user ask for the weather, use the weather tool.",
+    tools: [
+      ...await blTools(['blaxel-search']).ToLangChain(),
+      tool(async (input: any) => {
+        logger.debug("TOOLCALLING: local weather", input)
+        return `The weather in ${input.city} is sunny`;
+      },{
+        name: "weather",
+        description: "Get the weather in a specific city",
+        schema: z.object({
+          city: z.string(),
+        })
+      })
+    ],
+  }).stream({
+    messages: [new HumanMessage(input)],
+  });
+
+  for await (const chunk of streamResponse) {
+    if(chunk.agent) for(const message of chunk.agent.messages) {
+      stream.write(message.content)
+    }
+  }
+  stream.end();
+}
+```
+</CodeGroup>
+
+### What are the main differences for blaxel integration here?
+
+The tools are loaded without any configuration when it's on blaxel platform.
+```ts
+await blTools(['blaxel-search']).To...()
+```
+In fact, what you are getting through this command, is an auto discovery of the MCP server "blaxel-search" which provide multiple tools.
+You don't have to set anything else, the agent will be able to consume the tools with this simple line.
+
+
+The model is plug directly to your model on blaxel platform
+You don't have to provide any ApiKey or any credentials, it will work locally through CLI access, and with the workspace access when deployed.
+```ts
+await blModel("gpt-4o-mini").To...()
+```
+
+
+
+## Deploy your agent
+
+When you are ready to deploy in production, you can just use the blaxel CLI deploy command.
+```sh
+bl deploy
+```
