@@ -58,7 +58,9 @@
         "Get-started",
         "Get-started/Agent-prompt",
         "Get-started/Agent-with-tools",
-        "Get-started/Agent-chaining"
+        "Get-started/Agent-chaining",
+        "Get-started/Overview-ts-sdk",
+        "Get-started/Variables-and-secrets"
       ]
     },
     {

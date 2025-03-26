@@ -1,0 +1,84 @@
+---
+
+title: 'Overview of the TS SDK'
+
+description: 'The Typescript SDK allow to connect your agentic code with Blaxel Platform.'
+
+---
+
+# Core features
+
+## Connect with a model on Blaxel
+
+We provide an helper, to avoid managing connection with the model on Blaxel by yourself.
+
+```ts
+import { blModel } from "@blaxel/sdk";
+
+const model = await blModel("BlaxelModelName").toLlamaIndex();
+```
+
+You just retrieve it by name, available from blaxel UI
+You will be able to convert it to the framework you want to use.
+
+Available frameworks :
+- LlamaIndex : toLlamaIndex
+- VercelAI : toVercelAI
+- LangChain : toLangChain
+
+
+## Connect with a tool
+
+While you can deploy a MCP server on blaxel, and create your own, you wan't to be able to consume them easily from an agent.
+
+```ts
+import { blTools } from "@blaxel/sdk";
+
+const tools = await blTools(['mcpServerName']).ToVercelAI();
+```
+
+Same as the model, you can use it with the framework you want.
+
+Available frameworks :
+- VercelAI : toVercelAI
+- LangChain : toLangChain
+- LlamaIndex : toLlamaIndex
+
+## Connect to another agent
+
+For agent chaining, you can do it the standard way for each framework, and create only one deployment, doing everything.
+At Blaxel, we have made a bet on two things :
+- Agent could become really big, and monolothic is not a good solution for long term maintenance.
+- An atomic agent could be use in multiple agent project
+
+So we allow directly a microservice architecture for agent chaining, and you can call an agent from another agent, instead of puting everything on the same code.
+
+```ts
+import { blAgent } from "@blaxel/sdk";
+
+const myFirstAgentResponse = await blAgent("firstAgent").run(input);
+const mySecondAgentResponse = await blAgent("secondAgent").run(myFirstAgentResponse);
+```
+
+So you can create your own workflow with agents.
+
+
+## Instrumentation
+
+We provide an automatic instrumentation, and a logger to help you debug and monitor your agent.
+
+To enable it, you just have to require the sdk at root level of your project.
+
+```ts
+import "@blaxel/sdk";
+```
+
+It will automatically enable everything when deployed on Blaxel.
+
+If you want to put custom log and see them in the Blaxel UI, you will have to use our logger.
+
+```ts
+import { logger } from "@blaxel/sdk";
+
+logger.info("Hello, world!");
+```
