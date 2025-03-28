@@ -6,195 +6,282 @@ description: 'Use the Blaxel SDK to develop and run a custom agent in TypeScript
 
 ---
 
-You can **bring agents developed in TypeScript in any framework** (LangChain, CrewAI, or any custom framework) and deploy them on Blaxel by integrating a few lines of the Blaxel SDK and leveraging our other developer tools ([Blaxel CLI](../cli-reference), GitHub action, etc.).
+You can **bring agents developed in TypeScript in any framework** (Vervel, LlamaIndex, LangChain, VercelAI, or any custom framework) and deploy them on Blaxel by integrating a few lines of the Blaxel SDK and leveraging our other developer tools ([Blaxel CLI](../cli-reference), GitHub action, etc.).
 
 <Tip>Check out [this Getting Started](../Get-started) tutorial in order to develop and deploy your first Hello World AI agent globally in less than 5 minutes.</Tip>
 
-## Blaxel agent file structure
+## How to start ?
 
-### Overview
+If you already know the SDK, you could directly insert our SDK in your project, and deploy it as it is.  
+But if it's your first time, we recommend you to follow the steps below.
 
-To deploy a custom AI agent on Blaxel, you need the following file in your repository:
+### Step 1: Create a new project
 
-- **agent.ts (or src/agent.ts)**: This file must contain an *async* function that runs your agent. This function serves as the default entry point during serving and deployment.
-    - You can specify a different module to serve using the flag `bl serve --module your-function-path.your-function-name`
-    - The function accepts these arguments, which Blaxel passes when a request is made to your deployed agent:
-        - *request*: The [Fastify](https://fastify.dev/) Request that triggers the agent's execution.
-        - *args*: (Optional) Argument object containing the core agent algorithm. By default, it uses a [LangChain ReAct agent](https://v03.api.js.langchain.com/functions/langchain.agents.createReactAgent.html).
+This command will create a new project from a template, allowing to choose the framework you want to use.
+```sh
+bl create-agent-app my-tool-agent
 
-**Mark your agent's main function with Blaxel’s `wrapAgent` wrapper to serve it. You can override the default argument values that Blaxel passes upon requesting the agent by using the wrapper parameters** (see below).
-
-Some folders are optional but designed to handle specific parts of the agent code on Blaxel:
-
-- **src/functions**: all files listed in this folder will be interpreted as custom tools that will all be made available to the agent automatically when serving or deploying the agent. The tool’s main TypeScript function itself is identified with the `wrapFunction` wrapper.
-
-### Quickstart
-
-<Warning>It is required to have *npm* installed to use the following command.</Warning>
-
-You can quickly initialize a new project from scratch by using CLI command  `bl create-agent-app`. This will create a pre-scaffolded local repo where your entire code can be added. By default, this command creates a boilerplate agent that has:
-
-- A [LangChain ReAct agent](https://v03.api.js.langchain.com/functions/langchain.agents.createReactAgent.html) as the core agent logic. This agent can be overridden by passing a custom agent as `overrideAgent` in the options of the wrapAgent in */src/agent.ts*
-- A hello-world tool (a function) that returns a placeholder text string. This function can be customized by changing the code in the `helloworld` function in */src/functions/helloworld.ts*, and additional functions can be created in the */src/functions* folder.
-
-An option is available to turn the default *hello-world* agent into a **voice agent** when creating a new TypeScript agent app.
-
-## The wrapAgent higher-order function
-
-The `wrapAgent` decorator identifies the main function that handles your core agent logic such as how to handle queries and responses, tool calls and such.
-
-```tsx
-import { wrapAgent } from "@blaxel/sdk";
-
-export const agent = wrapAgent(async (request, args) => { ... }, {
-  agent: {
-    metadata: { name: "example-agent" }
-  }
-});
+┃ Project Name                                                                  
+┃ Name of your agent app                                                        
+┃ > my-tool-agent                                                               
+                                                                                
+  Language                                                                      
+  Language to use for your agent app                                            
+  > typescript                                                                  
+                                                                                
+                                                                                
+                                                                                
+  Template                                                                      
+  Template to use for your agent app                                            
+  > vercel-ai                                                                   
+    llamaindex                                                                  
+    langchain   
 ```
 
-Inside the wrapper, you can pass an object of options:
+### Step 2: Run the agent locally
 
-- **`agent`**: this can be either the Blaxel SDK’s `Agent` object or equivalent dict, and allows to specify all the parameters for the deployment of your agent on Blaxel. Examples include:
-    - `metadata.name`: the name of the agent on Blaxel
-    - `spec.description`: the description of the agent on Blaxel
-    - `spec.model`: the name of a model API deployed in your Blaxel workspace, to use as core chat model for the agent
-- **`overrideAgent`**: You can override the default [LangChain ReAct agent](https://v03.api.js.langchain.com/functions/langchain.agents.createReactAgent.html) by passing any custom agent instance. When the deployed agent receives a request, Blaxel will pass this as an argument to the agent's handler function.
-- **`overrideModel`**: You can query an LLM provider directly instead of routing through Blaxel by passing a [BaseChatModel object from LangChain](https://v03.api.js.langchain.com/classes/_langchain_core.language_models_chat_models.BaseChatModel.html). When the deployed agent receives a request, Blaxel will pass this as the *llm* to the default LangChain ReAct agent. This is used as a more granular alternative to `overrideAgent`.
-- **`remoteFunctions`**: You can pass on additional Blaxel [functions](../Functions/Overview) that are already deployed so your agent can access them too, in addition to the functions from `src/functions/`. This parameter takes in an array of *string* representing the names of the functions on Blaxel. This is used as a more granular alternative to `overrideAgent`.
+You can start your agent from the folder generated by the command above.
 
-### Managing secrets
+```bash
+cd my-agent
+bl serve --hotreload
+```
 
-You can add secrets to your code using `$secrets.KEY_NAME`. When you run the `bl deploy` command, Blaxel will attempt to retrieve the secret values and export them:
+Then you can directly interact with your agent by calling the standard endpoint already generated.
 
-- if the key exists in your environment variables, Blaxel will use that value
-- if not, you'll be prompted to enter the secret value in the terminal
+```bash
+bl run agent my-agent --local --data '{"inputs": "Hello, how are you?"}'
 
-```python
-  const handleRequest = async (request: FastifyRequest, args: AgentType) => {
-  ...
-  }
-  
-  return wrapAgent(handleRequest, {
-    agent: {
-      metadata: {
-        name: "test-thread2",
-      },
-      spec: {
-        runtime: {
-          envs: [
-            {
-              name: "OPENAI_API_KEY",
-              value: "$secrets.API_KEY",
-            },
-          ],
+// OR with a chat interface
+
+bl chat my-agent --local
+```
+
+### Step 3: Implement your agent
+
+In the folder generated you will retrieve a standard server in the entrypoint file `index.ts`.  
+In most case you will not have to work here, but if you need to add specific logic, you can do it.
+
+The main place to work will be the `agent.ts` file.  
+Depending of the framework you have chosen, the code will be different.  
+Our framework is made to give you ability to use the ability of Blaxel platform without transforming the main logic of your agent.
+
+The generated template file is a simple agent, using a Blaxel platform tool (MCP server) to search on the web, and also a local tool to show you how implement one locally.
+
+If you develop a bunch of tools, we recommend you to implement a MCP server with the tutorial [here](../Functions/Create-mcp-server).
+
+<CodeGroup>
+```ts agent.ts (Vercel AI)
+import { blModel, blTools, logger } from '@blaxel/sdk';
+import { streamText, tool } from 'ai';
+import { z } from 'zod';
+
+interface Stream {
+  write: (data: string) => void;
+  end: () => void;
+}
+
+export default async function agent(input: string, stream: Stream): Promise<void> {
+  const response = streamText({
+    experimental_telemetry: { isEnabled: true },
+    // dynamic load of model from blaxel platform
+    model: await blModel("gpt-4o-mini").ToVercelAI(),
+    tools: {
+      // dynamic load of tools from blaxel platform
+      ...await blTools(['blaxel-search']).ToVercelAI(),
+      // And here an example of a local tool for vercel ai framework
+      "weather": tool({
+        description: "Get the weather in a specific city",
+        parameters: z.object({
+          city: z.string(),
+        }),
+        execute: async (args: { city: string }) => {
+          logger.debug("TOOLCALLING: local weather", args);
+          return `The weather in ${args.city} is sunny`;
         },
-      },
+      }),
     },
-  };
-```
+    system: "You are an agent which will give the weather when a city is provided, and also do a quick search about this city.",
+    messages: [
+      { role: 'user', content: input }
+    ],
+    maxSteps: 5,
+  });
 
-![Screenshot 2025-02-15 at 7.04.07 PM.png](Develop-an-agent-ts/Screenshot_2025-02-15_at_7.04.07_PM.png)
-
-### Example
-
-Here's an example that demonstrates overriding the default *agent* object.
-
-```tsx
-import { FastifyRequest } from 'fastify';
-import { ChatOpenAI } from '@langchain/openai';
-import { createReactAgent } from '@langchain/langgraph/prebuilt';
-import { wrapAgent } from '@blaxel/sdk';
-import helloworld from './customfunctions/helloworld';
-
-// Initialize the chat model
-const chat = new ChatOpenAI();
-
-// Create a ReAct agent with custom tools
-const customAgent = createReactAgent({
-  llm: chat,
-  tools: [helloworld]
-});
-
-// Create the main agent handler
-const handler = async (request: FastifyRequest, args: { agent: any }) => {
-  // Your main agent logic here
-  // ...
-};
-
-// Export the wrapped agent
-export const agent = wrapAgent(handler, {
-  agent: {
-    metadata: {
-      name: "langchain-example",
-    },
-    spec: {
-      model: "sandbox-openai",
-    },
-  },
-  overrideAgent: customAgent,
-}); 
-```
-
-When developing custom agents, you may also need to retrieve instantiated model APIs and functions in your code. The following section shows you how to.
-
-## Retrieve existing functions and model APIs
-
-### Get model APIs
-
-You can use model APIs deployed on Blaxel by calling `getChatModel()`. This function returns a model API **in LangChain format** [BaseChatModel](https://v03.api.js.langchain.com/classes/_langchain_core.language_models_chat_models.BaseChatModel.html)
-
-```tsx
-import { getChatModel } from '@blaxel/sdk';
-import { createReactAgent } from "@langchain/langgraph/prebuilt";
-
-const chat = await getChatModel("model-name-on-Blaxel");
-
-const customAgent = createReactAgent({ llm: chat, tools: [] });
-```
-
-### Get functions
-
-You can use [functions](../Functions/Overview) defined both in your code and deployed on Blaxel by calling `getFunctions()`. This function returns a list of tools **in LangChain format** [StructuredTool](https://v03.api.js.langchain.com/classes/_langchain_core.tools.StructuredTool.html)**.**
-
-```tsx
-import { getFunctions } from "@blaxel/sdk";
-import { createReactAgent } from "@langchain/langgraph/prebuilt";
-
-const functions = await getFunctions();
-
-const customAgent = createReactAgent({ llm: chat, tools: functions });
-```
-
-By default, this returns the list of functions **defined in the local folder** `src/functions/`. You can pass several parameters:
-
-- **`remoteFunctions`**: to retrieve additional Blaxel [functions](../Functions/Overview) that are already deployed so your agent can access them too, in addition to the functions from `src/functions/`. This parameter takes in an array of *string* representing the names of the functions on Blaxel
-
-### Manage threads for sessions
-
-To simulate multi-turn conversations, agent consumers can generate a thread ID and include it in the agent request using either the `X-Blaxel-Thread-Id` or `Thread-Id` header. You can access this thread by calling `getDefaultThread()` in your agent code.
-
-```tsx
-import { getDefaultThread } from "@blaxel/sdk";
-
-const handleRequest = async (request: FastifyRequest, args: AgentType) => {
-  const { agent } = args;
-  const body = (await request.body) as InputType;
-  const input = body.inputs || body.input || "";
-  
-  const thread_id = getDefaultThread(request) || uuidv4();
-
-  const stream = await agent.stream(
-    { messages: [new HumanMessage(input)] },
-    { configurable: { thread_id } }
-  );
-  
- ...
- 
+  for await (const delta of response.textStream) {
+    stream.write(delta);
+  }
+  stream.end();
 }
 ```
 
-<Note>See an example of [how to use the Blaxel SDK to develop and deploy a custom LangChain agent](../Examples/Deploy-a-LangChain-agent) in 5 minutes.</Note>
+```typescript agent.ts (LlamaIndex)
+import { blModel, blTools, logger } from '@blaxel/sdk';
+import { agent, AgentStream, tool, ToolCallLLM } from "llamaindex";
+import { z } from "zod";
+interface Stream {
+  write: (data: string) => void;
+  end: () => void;
+}
+
+export default async function myagent(input: string, stream: Stream): Promise<void> {
+  const streamResponse = agent({
+    llm: await blModel("gpt-4o-mini").ToLlamaIndex() as unknown as ToolCallLLM,
+    tools: [...await blTools(['blaxel-search']).ToLlamaIndex(),
+      tool({
+        name: "weather",
+        description: "Get the weather in a specific city",
+        parameters: z.object({
+          city: z.string(),
+        }),
+        execute: async (input) => {
+          logger.debug("TOOLCALLING: local weather", input)
+          return `The weather in ${input.city} is sunny`;
+        },
+      })
+    ],
+    systemPrompt: "If the user ask for the weather, use the weather tool.",
+  }).run(input);
+
+  for await (const event of streamResponse) {
+    if (event instanceof AgentStream) {
+      for (const chunk of event.data.delta) {
+        stream.write(chunk);
+      }
+    }
+  }
+  stream.end();
+}
+```
+
+```typescript agent.ts (LangChain)
+import { blModel, blTools, logger } from '@blaxel/sdk';
+import { HumanMessage } from "@langchain/core/messages";
+import { tool } from "@langchain/core/tools";
+import { createReactAgent } from "@langchain/langgraph/prebuilt";
+import { z } from "zod";
+interface Stream {
+  write: (data: string) => void;
+  end: () => void;
+}
+
+export default async function agent(input: string, stream: Stream): Promise<void> {
+  const streamResponse = await createReactAgent({
+    llm: await blModel("gpt-4o-mini").ToLangChain(),
+    prompt: "If the user ask for the weather, use the weather tool.",
+    tools: [
+      ...await blTools(['blaxel-search']).ToLangChain(),
+      tool(async (input: any) => {
+        logger.debug("TOOLCALLING: local weather", input)
+        return `The weather in ${input.city} is sunny`;
+      },{
+        name: "weather",
+        description: "Get the weather in a specific city",
+        schema: z.object({
+          city: z.string(),
+        })
+      })
+    ],
+  }).stream({
+    messages: [new HumanMessage(input)],
+  });
+
+  for await (const chunk of streamResponse) {
+    if(chunk.agent) for(const message of chunk.agent.messages) {
+      stream.write(message.content)
+    }
+  }
+  stream.end();
+}
+```
+</CodeGroup>
+
+
+
+## Blaxel agent template file structure
+
+### Overview
+
+```tree
+package.json            # This file is the standard package.json file, mandatory, it define the entrypoint of the project, and dependencies.
+blaxel.toml             # This file is a project configuration dedicated to Blaxel platform, it's not mandatory, but it allow you to customize the deployment.
+tsconfig.json           # This file is the standard tsconfig.json file, only needed if you use typescript, like in our templates.
+.blaxel                 # this folder allow you to add custom resources, they will be deployed with your agent.
+├── blaxel-search.yaml  # Here blaxel-search is a standard Web search tool, you can use it to develop your first agent, but the rate limit is low, we recommend to use a MCP server deploy by yourself on the platform for production.
+src/
+└── index.ts            # This file is the standard entrypoint of the project, it's used to start the server, and create an endpoint bind with agent.ts file.
+├── agent.ts            # This file is the main file of your agent, it's loaded from index.ts, in the template, all the agent logic is implemented here.
+```
+
+
+### package.json
+
+Here the main import things are the scripts, they are use for the `bl serve` and `bl deploy` commands.
+
+```json
+{
+  "name": "vercel-first",
+  "version": "1.0.0",
+  "description": "<no value>",
+  "keywords": [],
+  "license": "MIT",
+  "author": "cdrappier",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "prod": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^1.2.5",
+    "@blaxel/sdk": "0.1.1-preview.9",
+    "ai": "^4.1.61",
+    "fastify": "^5.2.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.13.11",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
+
+Depending of what you do, all of them are not required.
+With typescript, we use the 4 of them.
+
+`start` : start the server locally, directly through the typescript command, to not have to build the project when developing.
+`build` : build the project, it's done automatically when deploying.
+`prod` : start the server remotely from the dist folder, build need to be done before.
+`dev` : same as start, but with hotreload, it's useful when developing locally, each file change is reflected immediately.
+
+Other fields of package.json are standard to javascript/typescript projects, you can add your own dependencies as you want.
+Just take in mind than devDependencies will be use only for the build command, we remove them right after.
+
+### blaxel.toml
+
+This file is used to configure the deployment of the agent on Blaxel platform.
+It's not mandatory, but it allow you to customize the deployment.
+
+```toml
+name = "my-agent"
+workspace = "my-workspace"
+type = "agent"
+
+agents = []
+functions = ["blaxel-search"]
+models = ["gpt-4o-mini"]
+
+[env]
+DEFAULT_CITY = "San Francisco"
+```
+
+Here `name`, `workspace`, `type` are not mandatory, but each bl command in the folder, will use them instead of asking you to provide them.
+
+`agents`, `functions`, `models` are used to specify the resources that will be deployed with the agent, not mandatory, but if you specify them here, it will be preload with your build, removing any dependency to our controlplane during runtime, so your runtime will be faster!
+
+`env` is used to specify the environment variables that will be used in the agent, it's not secret, but it allow you to retrieve them from the code easily from our SDK.
+
 
 <Card title="Deploy an agent" icon="server" href="/Agents/Deploy-an-agent">
 Learn how to deploy your custom AI agents on Blaxel as a serverless endpoint. 
